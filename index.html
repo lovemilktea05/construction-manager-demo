@@ -232,10 +232,10 @@ main{padding:14px}
   <div class="no-print" style="padding:14px">
     <button class="linkbtn" onclick="showEstimates()">‹ 返回估價單</button>
     <div class="estimate-toolbar">
-      <button class="primary" onclick="window.print()">列印／儲存 PDF</button>
+      <button class="primary" onclick="exportEstimatePDF()">下載正式 PDF</button>
       <button class="secondary" onclick="editCurrentEstimate()">編輯</button>
     </div>
-    <div class="muted">iPhone：按「列印／儲存 PDF」後，可在列印預覽中分享或儲存成 PDF。</div>
+    <div class="muted">按「下載正式 PDF」會直接產生乾淨的 A4 估價單，不會帶入瀏覽器網址、日期或頁尾。</div>
   </div>
   <div id="estimatePrintWrap" class="estimate-print-wrap"></div>
 </section>
@@ -634,7 +634,7 @@ function openProject(pid){
   <div class="stat"><div class="k">待收款</div><div class="v">${money(due)}</div></div>
   <div class="stat"><div class="k">累計支出</div><div class="v">${money(t.expense)}</div></div>
  </div>
- <div class="section-title"><h2>工程資料</h2></div>
+ <div class="section-title"><h2>工程資料</h2><button class="linkbtn" onclick="openProjectEdit(\'${p.id}\')">編輯工程</button></div>
  <div class="card">
   <div class="row"><span class="muted">地址</span><span>${p.address||'—'}</span></div>
   <div class="row"><span class="muted">負責人</span><span>${p.owner||'—'}</span></div>
@@ -1063,6 +1063,56 @@ function deleteAdjustment(aid,pid){
  openProject(pid);
 }
 
+
+function openProjectEdit(pid){
+  const p=db.projects.find(x=>x.id===pid); if(!p)return;
+  modal('編輯工程資料',`<form class="form" onsubmit="saveProjectEdit(event,'${pid}')">
+    <label>工程名稱 *</label><input name="name" required value="${esc(p.name||'')}">
+    <label>從客戶名單選擇</label><select name="clientId" onchange="fillClientFromList(this)">${clientOptions(p.clientId||'')}</select>
+    <label>客戶／公司名稱</label><input name="client" value="${esc(p.client||'')}">
+    <label>聯絡人</label><input name="contact" value="${esc(p.contact||'')}">
+    <label>聯絡電話</label><input name="phone" inputmode="tel" value="${esc(p.phone||'')}">
+    <label>工程地址</label><input name="address" value="${esc(p.address||'')}">
+    <label>合約金額</label><input name="contract" inputmode="numeric" type="number" min="0" value="${+p.contract||0}">
+    <label>開工日期</label><input name="start" type="date" value="${esc(p.start||'')}">
+    <label>預計完工日期</label><input name="end" type="date" value="${esc(p.end||'')}">
+    <label>負責人</label><input name="owner" value="${esc(p.owner||'')}">
+    <label>工程狀態</label>
+    <select name="status">
+      ${['洽談中','施工中','完工','保固中','已結案'].map(x=>`<option ${p.status===x?'selected':''}>${x}</option>`).join('')}
+    </select>
+    <label>備註</label><textarea name="note">${esc(p.note||'')}</textarea>
+    <div class="actions">
+      <button type="button" class="secondary" onclick="closeModal()">取消</button>
+      <button class="primary">儲存變更</button>
+    </div>
+  </form>`);
+}
+
+function saveProjectEdit(e,pid){
+  const x=formObj(e);
+  const p=db.projects.find(z=>z.id===pid); if(!p)return;
+  Object.assign(p,{
+    name:x.name||'',
+    clientId:x.clientId||'',
+    client:x.client||'',
+    contact:x.contact||'',
+    phone:x.phone||'',
+    address:x.address||'',
+    contract:+x.contract||0,
+    start:x.start||'',
+    end:x.end||'',
+    owner:x.owner||'',
+    status:x.status||p.status||'施工中',
+    note:x.note||'',
+    updated:Date.now()
+  });
+  if(p.status==='已結案') projectView='history';
+  save();
+  closeModal();
+  openProject(pid);
+}
+
 function editProjectStatus(pid){
  const p=db.projects.find(x=>x.id===pid); if(!p)return;
  modal('變更工程狀態',`<form class="form" onsubmit="saveProjectStatus(event,'${pid}')">
@@ -1473,6 +1523,99 @@ function renderEstimatePrint(e){
     <div class="estimate-sign"><div>客戶簽認</div><div>${esc(settings.companyName||'公司簽認')}</div></div>`;
 }
 
+
+async function exportEstimatePDF(){
+  const e=db.estimates.find(x=>x.id===currentEstimateId);
+  if(!e){ alert('找不到目前估價單資料。'); return; }
+  if(!window.html2canvas || !window.jspdf){
+    alert('PDF 元件尚未載入完成，請確認網路連線後再試一次。');
+    return;
+  }
+
+  const source=document.getElementById('estimatePrintWrap');
+  if(!source){ alert('找不到估價單版面。'); return; }
+
+  const btns=document.querySelectorAll('button');
+  btns.forEach(b=>b.disabled=true);
+
+  try{
+    // Clone estimate content into an off-screen A4-like container so the exported
+    // document is independent from browser print headers/footers.
+    const holder=document.createElement('div');
+    holder.style.position='fixed';
+    holder.style.left='-10000px';
+    holder.style.top='0';
+    holder.style.width='794px';
+    holder.style.background='#fff';
+    holder.style.color='#111';
+    holder.style.padding='60px 52px';
+    holder.style.boxSizing='border-box';
+    holder.style.fontFamily='-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Segoe UI",sans-serif';
+
+    const clone=source.cloneNode(true);
+    clone.style.width='100%';
+    clone.style.maxWidth='none';
+    clone.style.padding='0';
+    clone.style.margin='0';
+    holder.appendChild(clone);
+    document.body.appendChild(holder);
+
+    const canvas=await html2canvas(holder,{
+      scale:2,
+      backgroundColor:'#ffffff',
+      useCORS:true,
+      logging:false,
+      windowWidth:794
+    });
+
+    holder.remove();
+
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF({orientation:'p',unit:'mm',format:'a4',compress:true});
+
+    const pageW=210, pageH=297;
+    const marginX=10, marginY=10;
+    const usableW=pageW-marginX*2;
+    const usableH=pageH-marginY*2;
+
+    const imgW=usableW;
+    const imgH=canvas.height*imgW/canvas.width;
+
+    // Multi-page image slicing to avoid browser print headers and preserve layout.
+    const pxPerMm=canvas.width/imgW;
+    const slicePx=Math.floor(usableH*pxPerMm);
+    let y=0, page=0;
+
+    while(y<canvas.height){
+      const h=Math.min(slicePx,canvas.height-y);
+      const part=document.createElement('canvas');
+      part.width=canvas.width;
+      part.height=h;
+      part.getContext('2d').drawImage(canvas,0,y,canvas.width,h,0,0,canvas.width,h);
+
+      const data=part.toDataURL('image/jpeg',0.95);
+      const drawH=h/pxPerMm;
+
+      if(page>0) pdf.addPage();
+      pdf.addImage(data,'JPEG',marginX,marginY,imgW,drawH,undefined,'FAST');
+
+      y+=h;
+      page++;
+    }
+
+    const safeNo=(e.no||'估價單').replace(/[\\/:*?"<>|]/g,'_');
+    const client=(e.clientName||'').replace(/[\\/:*?"<>|]/g,'_');
+    const filename=(client?client+'_':'')+safeNo+'.pdf';
+    pdf.save(filename);
+
+  }catch(err){
+    console.error(err);
+    alert('PDF 產生失敗，請稍後再試。');
+  }finally{
+    btns.forEach(b=>b.disabled=false);
+  }
+}
+
 function resetData(){
  if(confirm('確定要清除全部測試資料嗎？此動作無法復原。')){db={projects:[],incomes:[],expenses:[],progress:[],clients:[],vendors:[],adjustments:[],quotes:[],paymentPlans:[],estimates:[]};save();showPage('home')}
 }
@@ -1509,5 +1652,9 @@ applyCompanySettings();
 renderAll();
 showFirstSetup();
 </script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
 </body>
 </html>
