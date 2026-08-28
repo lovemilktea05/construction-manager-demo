@@ -137,6 +137,12 @@ main{padding:14px}
 .photo-empty{padding:16px 4px;color:var(--muted);font-size:13px}
 .photo-full{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px}
 .photo-full img{max-width:100%;max-height:88vh;object-fit:contain}.photo-full button{position:absolute;right:16px;top:16px}
+
+.company-stamp-preview{margin-top:10px;padding:10px;border:1px dashed var(--line);border-radius:12px;background:#fff;text-align:center}
+.company-stamp-preview img{max-width:180px;max-height:110px;object-fit:contain}
+.estimate-company-stamp{height:4cm;display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px}
+.estimate-company-stamp img{max-width:3.8cm;max-height:3.8cm;object-fit:contain}
+
 </style>
 
 <meta name="theme-color" content="#f5f6f8">
@@ -404,7 +410,7 @@ async function renderProjectPhotos(pid){const box=document.getElementById('photo
 async function viewProjectPhoto(id){const d=await photoDB(),x=await new Promise((ok,no)=>{const r=d.transaction(PHOTO_STORE).objectStore(PHOTO_STORE).get(id);r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)});if(!x)return;const el=document.createElement('div');el.className='photo-full';el.innerHTML=`<img src="${URL.createObjectURL(x.blob)}"><button onclick="this.parentElement.remove()">關閉</button>`;el.onclick=e=>{if(e.target===el)el.remove()};document.body.appendChild(el)}
 async function deleteProjectPhoto(pid,id){if(!confirm('確定刪除這張工程照片？'))return;await photoDelete(id);await renderProjectPhotos(pid)}
 
-let settings={companyName:'',taxId:'',phone:'',address:'',owner:'',logo:''};
+let settings={companyName:'',taxId:'',phone:'',address:'',owner:'',logo:'',stamp:''};
 try{
   settings={...settings,...JSON.parse(localStorage.getItem(SETTINGS_LS)||'{}')};
 }catch(e){}
@@ -425,13 +431,52 @@ function companySettingsForm(first=false){
     <label>聯絡電話</label><input name="phone" inputmode="tel" value="${esc(settings.phone||'')}">
     <label>公司地址</label><input name="address" value="${esc(settings.address||'')}">
     <label>負責人</label><input name="owner" value="${esc(settings.owner||'')}">
+    <label>公司發票章／公司章</label>
+    <input name="stampFile" type="file" accept="image/png,image/jpeg,image/webp" onchange="previewCompanyStamp(this)">
+    <div id="companyStampPreview" class="company-stamp-preview">
+      ${settings.stamp?`<img src="${settings.stamp}" alt="公司章預覽">`:'<span class="muted">尚未上傳公司章</span>'}
+    </div>
+    ${settings.stamp?'<button type="button" class="secondary" style="width:100%;margin-top:8px" onclick="removeCompanyStamp()">移除目前公司章</button>':''}
     <div class="actions"><button class="primary">${first?'開始使用':'儲存公司資料'}</button></div>
   </form>`;
 }
+
+let pendingCompanyStamp=null;
+
+function previewCompanyStamp(input){
+  const file=input.files&&input.files[0];
+  if(!file)return;
+  if(!/^image\/(png|jpeg|webp)$/.test(file.type)){
+    alert('請上傳 PNG、JPG 或 WEBP 圖片。');
+    input.value='';
+    return;
+  }
+  const reader=new FileReader();
+  reader.onload=()=>{
+    pendingCompanyStamp=reader.result;
+    const box=document.getElementById('companyStampPreview');
+    if(box) box.innerHTML=`<img src="${pendingCompanyStamp}" alt="公司章預覽">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeCompanyStamp(){
+  if(!confirm('確定移除目前公司章？')) return;
+  settings.stamp='';
+  pendingCompanyStamp=null;
+  saveSettings();
+  openCompanySettings();
+}
+
 function openCompanySettings(){ modal('公司設定',companySettingsForm(false)); }
 function saveCompanySettingsForm(e,first){
   const x=formObj(e);
+  delete x.stampFile;
   settings={...settings,...x};
+  if(pendingCompanyStamp){
+    settings.stamp=pendingCompanyStamp;
+    pendingCompanyStamp=null;
+  }
   saveSettings();
   if(first){
     const el=document.getElementById('firstSetup'); if(el) el.remove();
@@ -1520,7 +1565,7 @@ function renderEstimatePrint(e){
       <div class="row" style="font-size:18px"><span><b>總計</b></span><b>${money(grand)}</b></div>
     </div>
     ${e.note?`<div style="margin-top:22px"><b>備註／付款條件</b><div style="white-space:pre-wrap;margin-top:8px;line-height:1.6">${esc(e.note)}</div></div>`:''}
-    <div class="estimate-sign"><div>客戶簽認</div><div>${esc(settings.companyName||'公司簽認')}</div></div>`;
+    <div class="estimate-sign"><div>客戶簽認</div><div><div class="estimate-company-stamp">${settings.stamp?`<img src="${settings.stamp}" alt="公司章">`:''}</div>${esc(settings.companyName||'公司簽認')}</div></div>`;
 }
 
 
