@@ -116,7 +116,12 @@ main{padding:14px}
   .estimate-print-wrap .meta .row{font-size:13px}
   .estimate-table{font-size:12px}
   .estimate-table th,.estimate-table td{border:1px solid #999;padding:6px}
-  
+  .estimate-sign{margin-top:34px;display:grid;grid-template-columns:1fr 1fr;gap:28px;break-inside:avoid;page-break-inside:avoid}
+  .estimate-sign-box{position:relative;height:5.6cm;min-height:5.6cm;text-align:center;box-sizing:border-box;padding:0 8px}
+  .estimate-sign-title{font-weight:700;font-size:16px;text-align:center;margin:0}
+  .estimate-sign-space{height:4cm;display:flex;align-items:center;justify-content:center;box-sizing:border-box}
+  .estimate-sign-line{border-top:1px solid #777;padding-top:8px;text-align:center;min-height:24px}
+  .estimate-sign-box::before{display:none!important}
 }
 
 
@@ -138,41 +143,8 @@ main{padding:14px}
 
 .company-stamp-preview{margin-top:10px;padding:10px;border:1px dashed var(--line);border-radius:12px;background:#fff;text-align:center}
 .company-stamp-preview img{max-width:180px;max-height:110px;object-fit:contain}
-
-
-
-.estimate-sign{
-  margin-top:34px;
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:40px;
-}
-.estimate-sign .sign-cell{
-  min-width:0;
-}
-.estimate-sign .sign-space{
-  height:4cm;
-  position:relative;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  border-bottom:1px solid #777;
-}
-.estimate-sign .sign-label{
-  padding-top:8px;
-  text-align:center;
-  font-size:13px;
-  line-height:1.4;
-}
-.estimate-sign .company-stamp-img{
-  display:block;
-  max-width:3.6cm;
-  max-height:3.6cm;
-  width:auto;
-  height:auto;
-  object-fit:contain;
-  margin:auto;
-}
+.estimate-company-stamp{width:100%;height:4cm;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.estimate-company-stamp img{display:block;width:auto;height:auto;max-width:3.6cm;max-height:3.6cm;object-fit:contain;transform:none!important}
 
 </style>
 
@@ -189,7 +161,7 @@ main{padding:14px}
 <div class="app">
 <header>
   <div class="brand" id="brandName">我的工程公司</div>
-  <div class="sub">工程管理系統｜商品母版 V1｜手機版</div>
+  <div class="sub">工程管理系統｜商品母版 V1.2｜手機版</div>
 </header>
 
 <main>
@@ -435,8 +407,37 @@ async function restoreAllPhotos(rows){
 }
 async function compressPhoto(f){const b=await createImageBitmap(f),m=1600,k=Math.min(1,m/Math.max(b.width,b.height)),c=document.createElement('canvas');c.width=Math.round(b.width*k);c.height=Math.round(b.height*k);c.getContext('2d').drawImage(b,0,0,c.width,c.height);return await new Promise(r=>c.toBlob(r,'image/jpeg',.82))||f}
 function photoSection(pid){return `<div class="section-title"><h2>工程照片</h2><button class="linkbtn" onclick="openPhotoAdd('${pid}')">＋拍照／上傳</button></div><div id="photoGrid_${pid}" class="photo-grid"><div class="photo-empty">照片載入中…</div></div>`}
-function openPhotoAdd(pid){modal('新增工程照片',`<form class="form" onsubmit="saveProjectPhoto(event,'${pid}')"><label>拍照／選擇照片</label><input name="photo" type="file" accept="image/*" required><label>施工階段</label><select name="stage"><option>施工前</option><option>拆除</option><option>水電</option><option>泥作</option><option>木作</option><option>油漆</option><option>安裝</option><option>完工</option><option>保固／維修</option><option>其他</option></select><label>照片日期</label><input name="photoDate" type="date" value="${today()}"><label>備註</label><textarea name="note" rows="3" placeholder="例如：客廳天花板封板前、水電管線位置"></textarea><button class="primary">儲存照片</button></form>`)}
-async function saveProjectPhoto(e,pid){e.preventDefault();const f=e.target.elements.photo.files[0];if(!f)return;try{const blob=await compressPhoto(f);await photoPut({id:'ph_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),projectId:pid,blob,stage:e.target.elements.stage.value,photoDate:e.target.elements.photoDate.value,note:e.target.elements.note.value.trim(),createdAt:new Date().toISOString()});closeModal();await renderProjectPhotos(pid)}catch(err){alert('照片儲存失敗，請確認瀏覽器儲存空間後再試一次。');console.error(err)}}
+function openPhotoAdd(pid){modal('新增工程照片',`<form class="form" onsubmit="saveProjectPhoto(event,'${pid}')"><label>拍照／選擇照片</label><input name="photo" type="file" accept="image/*" multiple required><div class="muted" style="margin-top:6px">可一次選擇多張照片；手機也可選擇相機拍攝。</div><label>施工階段</label><select name="stage"><option>施工前</option><option>拆除</option><option>水電</option><option>泥作</option><option>木作</option><option>油漆</option><option>安裝</option><option>完工</option><option>保固／維修</option><option>其他</option></select><label>照片日期</label><input name="photoDate" type="date" value="${today()}"><label>備註</label><textarea name="note" rows="3" placeholder="例如：客廳天花板封板前、水電管線位置"></textarea><button class="primary">儲存照片</button></form>`)}
+async function saveProjectPhoto(e,pid){
+  e.preventDefault();
+  const files=[...(e.target.elements.photo.files||[])];
+  if(!files.length)return;
+  const stage=e.target.elements.stage.value;
+  const photoDate=e.target.elements.photoDate.value;
+  const note=e.target.elements.note.value.trim();
+  const submit=e.submitter; if(submit){submit.disabled=true;submit.textContent='儲存中…';}
+  try{
+    let saved=0;
+    for(const f of files){
+      if(!f.type.startsWith('image/'))continue;
+      const blob=await compressPhoto(f);
+      await photoPut({
+        id:'ph_'+Date.now()+'_'+saved+'_'+Math.random().toString(36).slice(2,7),
+        projectId:pid,blob,stage,photoDate,note,
+        fileName:f.name||'',createdAt:new Date().toISOString()
+      });
+      saved++;
+    }
+    closeModal();
+    await renderProjectPhotos(pid);
+    if(saved>1) alert('已儲存 '+saved+' 張工程照片。');
+  }catch(err){
+    alert('照片儲存失敗，請確認瀏覽器儲存空間後再試一次。');
+    console.error(err);
+  }finally{
+    if(submit){submit.disabled=false;submit.textContent='儲存照片';}
+  }
+}
 async function renderProjectPhotos(pid){const box=document.getElementById('photoGrid_'+pid);if(!box)return;try{const a=await photoList(pid);if(!a.length){box.innerHTML='<div class="photo-empty">目前還沒有工程照片。</div>';return}box.innerHTML=a.map(x=>{const u=URL.createObjectURL(x.blob);return `<div class="photo-card"><img src="${u}" onclick="viewProjectPhoto('${x.id}')"><div class="photo-meta"><b>${esc(x.stage||'工程照片')}</b>${esc(x.photoDate||'')}${x.note?'<br>'+esc(x.note):''}</div><div class="photo-actions"><button class="danger" onclick="deleteProjectPhoto('${pid}','${x.id}')">刪除</button></div></div>`}).join('')}catch(err){box.innerHTML='<div class="photo-empty">照片讀取失敗。</div>'}}
 async function viewProjectPhoto(id){const d=await photoDB(),x=await new Promise((ok,no)=>{const r=d.transaction(PHOTO_STORE).objectStore(PHOTO_STORE).get(id);r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)});if(!x)return;const el=document.createElement('div');el.className='photo-full';el.innerHTML=`<img src="${URL.createObjectURL(x.blob)}"><button onclick="this.parentElement.remove()">關閉</button>`;el.onclick=e=>{if(e.target===el)el.remove()};document.body.appendChild(el)}
 async function deleteProjectPhoto(pid,id){if(!confirm('確定刪除這張工程照片？'))return;await photoDelete(id);await renderProjectPhotos(pid)}
@@ -1597,15 +1598,15 @@ function renderEstimatePrint(e){
     </div>
     ${e.note?`<div style="margin-top:22px"><b>備註／付款條件</b><div style="white-space:pre-wrap;margin-top:8px;line-height:1.6">${esc(e.note)}</div></div>`:''}
     <div class="estimate-sign">
-      <div class="sign-cell">
-        <div class="sign-space"></div>
-        <div class="sign-label">客戶簽認</div>
+      <div class="estimate-sign-box">
+        <div class="estimate-sign-title">客戶簽認</div>
+        <div class="estimate-sign-space"></div>
+        <div class="estimate-sign-line"></div>
       </div>
-      <div class="sign-cell">
-        <div class="sign-space">
-          ${settings.stamp?`<img class="company-stamp-img" src="${settings.stamp}" alt="公司章">`:''}
-        </div>
-        <div class="sign-label">${esc(settings.companyName||'公司簽認')}</div>
+      <div class="estimate-sign-box">
+        <div class="estimate-sign-title">公司簽認</div>
+        <div class="estimate-sign-space"><div class="estimate-company-stamp">${settings.stamp?`<img src="${settings.stamp}" alt="公司章">`:''}</div></div>
+        <div class="estimate-sign-line">${esc(settings.companyName||'公司簽認')}</div>
       </div>
     </div>`;
 }
@@ -1613,6 +1614,7 @@ function renderEstimatePrint(e){
 
 async function exportEstimatePDF(){
   const e=db.estimates.find(x=>x.id===currentEstimateId);
+  const p=e?db.projects.find(x=>x.id===e.projectId):null;
   if(!e){ alert('找不到目前估價單資料。'); return; }
   if(!window.html2canvas || !window.jspdf){
     alert('PDF 元件尚未載入完成，請確認網路連線後再試一次。');
@@ -1690,9 +1692,11 @@ async function exportEstimatePDF(){
       page++;
     }
 
-    const safeNo=(e.no||'估價單').replace(/[\\/:*?"<>|]/g,'_');
-    const client=(e.clientName||'').replace(/[\\/:*?"<>|]/g,'_');
-    const filename=(client?client+'_':'')+safeNo+'.pdf';
+    const clean=v=>(v||'').replace(/[\\/:*?"<>|]/g,'_').trim();
+    const client=clean(e.clientName)||'客戶';
+    const project=clean(p?p.name:(e.title||''))||'工程';
+    const date=clean(e.date)||new Date().toISOString().slice(0,10);
+    const filename=client+'_'+project+'_'+date+'.pdf';
     pdf.save(filename);
 
   }catch(err){
