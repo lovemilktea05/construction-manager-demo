@@ -161,7 +161,7 @@ main{padding:14px}
 <div class="app">
 <header>
   <div class="brand" id="brandName">我的工程公司</div>
-  <div class="sub">工程管理系統｜商品母版 V1.2｜手機版</div>
+  <div class="sub">工程管理系統｜商品母版 V1.3｜手機版</div>
 </header>
 
 <main>
@@ -827,17 +827,29 @@ function openPaymentPlanList(pid){
        <div class="row"><span class="muted">應收金額</span><b>${money(x.amount)}</b></div>
        ${x.note?`<div class="muted">${x.note}</div>`:''}
        <div class="actions">
-         <button class="secondary" onclick="openPaymentPlanForm('${pid}','${x.id}')">編輯</button>
+         <button class="secondary" onclick="openPaymentPlanEdit('${x.id}')">編輯</button>
          ${x.status!=='已收款'?`<button class="primary" onclick="receivePaymentPlan('${x.id}')">登記收款</button>`:'<button class="secondary" disabled>已收款</button>'}
        </div>
      </div>
    `).join(''):'<div class="empty">尚未建立請款計畫</div>'}
  `);
 }
+
+function openPaymentPlanEdit(planId){
+  const plan=db.paymentPlans.find(x=>x.id===planId);
+  if(!plan){ alert('找不到這筆請款資料。'); return; }
+  openPaymentPlanForm(plan.projectId,plan.id);
+}
+
 function openPaymentPlanForm(pid,planId=''){
- const x=db.paymentPlans.find(p=>p.id===planId)||{
-   projectId:pid,type:'訂金',amount:0,dueDate:today(),status:'待請款',note:''
- };
+ let x;
+ if(planId){
+   x=db.paymentPlans.find(p=>p.id===planId);
+   if(!x){ alert('找不到這筆請款資料。'); return; }
+   pid=x.projectId;
+ }else{
+   x={projectId:pid,type:'訂金',amount:0,dueDate:today(),status:'待請款',note:''};
+ }
  modal(planId?'編輯請款':'新增請款',`<form class="form" onsubmit="savePaymentPlan(event,'${pid}','${planId}')">
    <label>請款項目</label>
    <select name="type">
@@ -854,7 +866,7 @@ function openPaymentPlanForm(pid,planId=''){
    <label>備註</label>
    <textarea name="note">${x.note||''}</textarea>
    <div class="actions">
-     <button type="button" class="secondary" onclick="closeModal()">取消</button>
+     <button type="button" class="secondary" onclick="${planId?`openPaymentPlanList('${pid}')`:'closeModal()'}">取消</button>
      <button class="primary">儲存</button>
    </div>
  </form>`);
@@ -877,7 +889,8 @@ function savePaymentPlan(e,pid,planId){
  }
  save();
  closeModal();
- openPaymentPlanList(pid);
+ openProject(pid);
+ setTimeout(()=>openPaymentPlanList(pid),0);
 }
 function receivePaymentPlan(planId){
  const plan=db.paymentPlans.find(x=>x.id===planId); if(!plan)return;
@@ -912,7 +925,8 @@ function confirmReceivePaymentPlan(e,planId){
  plan.receivedAmount=+x.amount||0;
  save();
  closeModal();
- openPaymentPlanList(plan.projectId);
+ openProject(plan.projectId);
+ setTimeout(()=>openPaymentPlanList(plan.projectId),0);
 }
 function renderUpcomingPayments(){
  const wrap=document.getElementById('upcomingPayments'); if(!wrap)return;
