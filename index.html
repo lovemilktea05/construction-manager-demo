@@ -146,6 +146,15 @@ main{padding:14px}
 .estimate-company-stamp{width:100%;height:4cm;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .estimate-company-stamp img{display:block;width:auto;height:auto;max-width:3.6cm;max-height:3.6cm;object-fit:contain;transform:none!important}
 
+
+.photo-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+.photo-album{border:1px solid var(--line);background:#fff;border-radius:14px;overflow:hidden;text-align:left;padding:0;min-height:132px}
+.photo-album-cover{height:92px;background:#eef1f3;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.photo-album-cover img{width:100%;height:100%;object-fit:cover}
+.photo-album-info{padding:9px 10px}.photo-album-info b{display:block}.photo-album-info span{font-size:12px;color:var(--muted)}
+.photo-recent{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:10px}
+.photo-recent img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:10px;background:#eee}
+.photo-date-title{font-weight:800;margin:16px 0 8px}
 </style>
 
 <meta name="theme-color" content="#f5f6f8">
@@ -161,7 +170,7 @@ main{padding:14px}
 <div class="app">
 <header>
   <div class="brand" id="brandName">我的工程公司</div>
-  <div class="sub">工程管理系統｜商品母版 V1.3｜手機版</div>
+  <div class="sub">工程管理系統｜商品母版 V1.4｜手機版</div>
 </header>
 
 <main>
@@ -406,7 +415,8 @@ async function restoreAllPhotos(rows){
   }
 }
 async function compressPhoto(f){const b=await createImageBitmap(f),m=1600,k=Math.min(1,m/Math.max(b.width,b.height)),c=document.createElement('canvas');c.width=Math.round(b.width*k);c.height=Math.round(b.height*k);c.getContext('2d').drawImage(b,0,0,c.width,c.height);return await new Promise(r=>c.toBlob(r,'image/jpeg',.82))||f}
-function photoSection(pid){return `<div class="section-title"><h2>工程照片</h2><button class="linkbtn" onclick="openPhotoAdd('${pid}')">＋拍照／上傳</button></div><div id="photoGrid_${pid}" class="photo-grid"><div class="photo-empty">照片載入中…</div></div>`}
+function photoSection(pid){return `<div class="section-title"><h2>工程照片</h2><button class="linkbtn" onclick="openPhotoAdd('${pid}')">＋拍照／上傳</button></div>
+<div id="photoOverview_${pid}"><div class="photo-empty">照片載入中…</div></div>`}
 function openPhotoAdd(pid){modal('新增工程照片',`<form class="form" onsubmit="saveProjectPhoto(event,'${pid}')"><label>拍照／選擇照片</label><input name="photo" type="file" accept="image/*" multiple required><div class="muted" style="margin-top:6px">可一次選擇多張照片；手機也可選擇相機拍攝。</div><label>施工階段</label><select name="stage"><option>施工前</option><option>拆除</option><option>水電</option><option>泥作</option><option>木作</option><option>油漆</option><option>安裝</option><option>完工</option><option>保固／維修</option><option>其他</option></select><label>照片日期</label><input name="photoDate" type="date" value="${today()}"><label>備註</label><textarea name="note" rows="3" placeholder="例如：客廳天花板封板前、水電管線位置"></textarea><button class="primary">儲存照片</button></form>`)}
 async function saveProjectPhoto(e,pid){
   e.preventDefault();
@@ -438,15 +448,42 @@ async function saveProjectPhoto(e,pid){
     if(submit){submit.disabled=false;submit.textContent='儲存照片';}
   }
 }
-async function renderProjectPhotos(pid){const box=document.getElementById('photoGrid_'+pid);if(!box)return;try{const a=await photoList(pid);if(!a.length){box.innerHTML='<div class="photo-empty">目前還沒有工程照片。</div>';return}box.innerHTML=a.map(x=>{const u=URL.createObjectURL(x.blob);return `<div class="photo-card"><img src="${u}" onclick="viewProjectPhoto('${x.id}')"><div class="photo-meta"><b>${esc(x.stage||'工程照片')}</b>${esc(x.photoDate||'')}${x.note?'<br>'+esc(x.note):''}</div><div class="photo-actions"><button class="danger" onclick="deleteProjectPhoto('${pid}','${x.id}')">刪除</button></div></div>`}).join('')}catch(err){box.innerHTML='<div class="photo-empty">照片讀取失敗。</div>'}}
-async function viewProjectPhoto(id){const d=await photoDB(),x=await new Promise((ok,no)=>{const r=d.transaction(PHOTO_STORE).objectStore(PHOTO_STORE).get(id);r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)});if(!x)return;const el=document.createElement('div');el.className='photo-full';el.innerHTML=`<img src="${URL.createObjectURL(x.blob)}"><button onclick="this.parentElement.remove()">關閉</button>`;el.onclick=e=>{if(e.target===el)el.remove()};document.body.appendChild(el)}
-async function deleteProjectPhoto(pid,id){if(!confirm('確定刪除這張工程照片？'))return;await photoDelete(id);await renderProjectPhotos(pid)}
-
-let settings={companyName:'',taxId:'',phone:'',address:'',owner:'',logo:'',stamp:''};
-try{
-  settings={...settings,...JSON.parse(localStorage.getItem(SETTINGS_LS)||'{}')};
-}catch(e){}
-
+async function renderProjectPhotos(pid){
+ const box=document.getElementById('photoOverview_'+pid);if(!box)return;
+ try{
+  const a=await photoList(pid);
+  if(!a.length){box.innerHTML='<div class="photo-empty">目前還沒有工程照片。</div>';return}
+  const recent=a.slice(0,6);
+  const stages=['施工前','拆除','水電','泥作','木作','油漆','安裝','完工','保固／維修','其他'];
+  const albums=stages.map(stage=>({stage,rows:a.filter(x=>(x.stage||'其他')===stage)})).filter(x=>x.rows.length);
+  box.innerHTML=`
+   <div class="row"><b>最近照片</b><button class="linkbtn" onclick="openAllProjectPhotos('${pid}')">查看全部 ${a.length} 張</button></div>
+   <div class="photo-recent">${recent.map(x=>`<img src="${URL.createObjectURL(x.blob)}" onclick="viewProjectPhoto('${x.id}')" alt="${esc(x.stage||'工程照片')}">`).join('')}</div>
+   <div style="margin-top:18px"><b>依施工階段</b></div>
+   <div class="photo-summary">${albums.map(g=>{const x=g.rows[0];return `<button class="photo-album" onclick="openPhotoAlbum('${pid}','${g.stage}')"><div class="photo-album-cover"><img src="${URL.createObjectURL(x.blob)}" alt="${esc(g.stage)}"></div><div class="photo-album-info"><b>${esc(g.stage)}</b><span>${g.rows.length} 張照片</span></div></button>`}).join('')}</div>`;
+ }catch(err){box.innerHTML='<div class="photo-empty">照片讀取失敗。</div>';console.error(err)}
+}
+async function openPhotoAlbum(pid,stage){
+ const rows=(await photoList(pid)).filter(x=>(x.stage||'其他')===stage);
+ showPhotoCollection(pid,rows,stage);
+}
+async function openAllProjectPhotos(pid){
+ const rows=await photoList(pid);
+ showPhotoCollection(pid,rows,'全部工程照片');
+}
+function showPhotoCollection(pid,rows,title){
+ const groups={};
+ rows.forEach(x=>{const d=x.photoDate||'未填日期';(groups[d]||(groups[d]=[])).push(x)});
+ const dates=Object.keys(groups).sort((a,b)=>b.localeCompare(a));
+ modal(title,`${rows.length?dates.map(d=>`<div class="photo-date-title">${esc(d)}・${groups[d].length} 張</div><div class="photo-grid">${groups[d].map(x=>`<div class="photo-card"><img src="${URL.createObjectURL(x.blob)}" onclick="viewProjectPhoto('${x.id}')"><div class="photo-meta"><b>${esc(x.stage||'工程照片')}</b>${x.note?esc(x.note):''}</div><div class="photo-actions"><button class="danger" onclick="deletePhotoFromCollection('${pid}','${x.id}','${esc(title)}')">刪除</button></div></div>`).join('')}</div>`).join(''):'<div class="photo-empty">沒有照片</div>'}`);
+}
+async function deletePhotoFromCollection(pid,id,title){
+ if(!confirm('確定刪除這張工程照片？'))return;
+ await photoDelete(id);
+ closeModal();
+ await renderProjectPhotos(pid);
+ if(title==='全部工程照片') await openAllProjectPhotos(pid); else await openPhotoAlbum(pid,title);
+}
 function saveSettings(){
   localStorage.setItem(SETTINGS_LS,JSON.stringify(settings));
   applyCompanySettings();
