@@ -1,0 +1,17 @@
+{
+  "name": "工程管理",
+  "short_name": "工程管理",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f5f6f8",
+  "theme_color": "#2f5d50",
+  "lang": "zh-Hant",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
